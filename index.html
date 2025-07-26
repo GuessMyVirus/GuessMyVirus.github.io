@@ -11,6 +11,7 @@
             --unknown: #f39c12;
             --dark: #2c3e50;
             --light: #ecf0f1;
+            --border: #dfe6e9;
         }
         * {
             box-sizing: border-box;
@@ -19,71 +20,99 @@
         }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
             color: var(--dark);
             line-height: 1.6;
-            padding: 20px;
             min-height: 100vh;
         }
         .container {
             max-width: 800px;
             margin: 0 auto;
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         header {
             background-color: var(--danger);
             color: white;
-            padding: 20px;
+            padding: 1.5rem;
             text-align: center;
+            border-bottom: 4px solid rgba(0,0,0,0.1);
         }
         h1 {
             font-size: 1.8rem;
-            margin-bottom: 10px;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
         }
         .scanner-container {
-            padding: 20px;
+            padding: 2rem;
+            flex: 1;
+        }
+        .url-input-container {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
         }
         .url-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .url-input input {
             flex: 1;
-            padding: 12px 15px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 16px;
+            padding: 0.75rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
         }
-        .url-input button {
-            padding: 12px 20px;
+        .url-input:focus {
+            outline: none;
+            border-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+        }
+        .scan-button {
+            padding: 0.75rem 1.5rem;
             background-color: var(--danger);
             color: white;
             border: none;
-            border-radius: 6px;
-            font-weight: bold;
+            border-radius: 8px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            font-size: 1rem;
         }
-        .url-input button:hover {
+        .scan-button:hover {
             background-color: #c0392b;
+            transform: translateY(-1px);
+        }
+        .error-message {
+            color: var(--danger);
+            margin: -1rem 0 1.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            opacity: 0;
+            height: 0;
+            transition: all 0.3s;
+        }
+        .error-message.visible {
+            opacity: 1;
+            height: auto;
+            margin-bottom: 1.5rem;
         }
         .results {
-            margin-top: 20px;
-            padding: 20px;
-            border-radius: 6px;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            border-radius: 8px;
             background-color: var(--light);
+            border: 1px solid var(--border);
+            display: none;
         }
         .verdict {
-            font-size: 1.3rem;
-            font-weight: bold;
-            padding: 15px;
-            border-radius: 6px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            padding: 1rem;
+            border-radius: 8px;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s;
         }
         .verdict-danger {
             background: var(--danger);
@@ -97,22 +126,27 @@
             background: var(--unknown);
             color: white;
         }
+        .vote-section {
+            display: none;
+        }
         .vote-buttons {
             display: flex;
-            gap: 10px;
-            margin: 20px 0;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
         }
         .vote-button {
-            padding: 10px 15px;
+            padding: 0.75rem;
             border: none;
-            border-radius: 6px;
-            font-weight: bold;
+            border-radius: 8px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
             flex: 1;
+            font-size: 1rem;
         }
         .vote-button:hover {
-            opacity: 0.9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .vote-safe {
             background: var(--safe);
@@ -123,7 +157,7 @@
             color: white;
         }
         .community-results {
-            margin-top: 20px;
+            margin-top: 1.5rem;
         }
         .loading {
             display: inline-block;
@@ -143,16 +177,33 @@
             font-size: 0.8rem;
             color: #7f8c8d;
             text-align: center;
-            margin-top: 20px;
-            padding: 20px;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border);
+            margin-top: auto;
         }
-        .hidden {
-            display: none;
+        .result-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
         }
-        .error-message {
-            color: var(--danger);
-            margin-top: 10px;
-            font-weight: bold;
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        .domain-check {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px dashed var(--border);
         }
     </style>
 </head>
@@ -164,20 +215,25 @@
         </header>
 
         <div class="scanner-container">
-            <div class="url-input">
-                <input type="text" id="urlInput" placeholder="Enter website URL (e.g. example.com)" autocomplete="off" value="">
-                <button id="scanButton">Scan</button>
+            <div class="url-input-container">
+                <input type="text" id="urlInput" placeholder="Enter website URL (e.g. example.com)" autocomplete="off" class="url-input">
+                <button id="scanButton" class="scan-button">Scan</button>
             </div>
-            <div id="errorMessage" class="error-message hidden"></div>
+            <div id="errorMessage" class="error-message"></div>
+            <div id="domainCheck" class="domain-check hidden">
+                <span class="loading"></span> <span id="domainCheckText">Verifying domain...</span>
+            </div>
 
             <div id="results" class="results hidden">
                 <div id="verdict" class="verdict verdict-unknown">
                     Scan result will appear here
                 </div>
                 
-                <div class="vote-buttons">
-                    <button class="vote-button vote-safe" id="safeButton">Mark as Safe</button>
-                    <button class="vote-button vote-danger" id="dangerButton">Mark as Dangerous</button>
+                <div id="voteSection" class="vote-section">
+                    <div class="vote-buttons">
+                        <button class="vote-button vote-safe" id="safeButton">Mark as Safe</button>
+                        <button class="vote-button vote-danger" id="dangerButton">Mark as Dangerous</button>
+                    </div>
                 </div>
 
                 <div id="communityResults" class="community-results">
@@ -270,7 +326,7 @@
                     // List of "non-existent" domains for demo purposes
                     const fakeDomains = ['nonexistent123.com', 'fake-test-domain.xyz', 'not-a-real-site.org'];
                     resolve(!fakeDomains.includes(normalized));
-                }, 500);
+                }, 1500);
             });
         }
         
@@ -300,85 +356,25 @@
                 
                 communityResultsEl.innerHTML = `
                     <h3>Community Reports</h3>
-                    <p>${data.safeVotes} safe votes vs ${data.dangerVotes} dangerous votes</p>
+                    <div class="result-stats">
+                        <div class="stat-item">
+                            <div class="stat-value">${data.safeVotes}</div>
+                            <div class="stat-label">Safe Votes</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${data.dangerVotes}</div>
+                            <div class="stat-label">Danger Votes</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${totalVotes}</div>
+                            <div class="stat-label">Total Votes</div>
+                        </div>
+                    </div>
                     ${data.dangerVotes > 0 ? '<p>Some users reported: Possible malware, phishing, or scam</p>' : ''}
                     <p><small>Last scanned: ${new Date(data.lastScanned).toLocaleString()}</small></p>
                 `;
             }
         }
-        
-        // Initialize the app
-        document.addEventListener('DOMContentLoaded', () => {
-            initDB();
-            
-            const urlInput = document.getElementById('urlInput');
-            const scanButton = document.getElementById('scanButton');
-            const safeButton = document.getElementById('safeButton');
-            const dangerButton = document.getElementById('dangerButton');
-            const resultsEl = document.getElementById('results');
-            const errorMessageEl = document.getElementById('errorMessage');
-            
-            // Check for URL parameter
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlParam = urlParams.get('url');
-            if (urlParam) {
-                urlInput.value = urlParam;
-                scanButton.click();
-            }
-            
-            // Scan button click handler
-            scanButton.addEventListener('click', async () => {
-                const url = urlInput.value.trim();
-                if (!url) return;
-                
-                // Hide previous results and errors
-                resultsEl.classList.add('hidden');
-                errorMessageEl.classList.add('hidden');
-                
-                // Validate domain format
-                if (!isValidDomain(url)) {
-                    errorMessageEl.textContent = 'Invalid domain format. Please enter a valid website address.';
-                    errorMessageEl.classList.remove('hidden');
-                    return;
-                }
-                
-                // Show loading state
-                resultsEl.classList.remove('hidden');
-                document.getElementById('loadingResults').classList.remove('hidden');
-                document.getElementById('communityResults').innerHTML = '<span class="loading"></span> Scanning website...';
-                
-                try {
-                    // Simulate DNS check
-                    const domainExists = await simulateDnsCheck(url);
-                    if (!domainExists) {
-                        errorMessageEl.textContent = 'This domain does not exist or is not reachable.';
-                        errorMessageEl.classList.remove('hidden');
-                        resultsEl.classList.add('hidden');
-                        return;
-                    }
-                    
-                    // Redirect to the proper URL format
-                    window.location.href = `/virusscan?url=${encodeURIComponent(url)}`;
-                    
-                    // This code won't actually execute because of the redirect above
-                    // It's here just in case the redirect fails
-                    const data = getWebsiteData(url);
-                    updateResultsUI(url, data);
-                    
-                    // Set up vote buttons for this URL
-                    safeButton.onclick = () => castVote(url, 'safe');
-                    dangerButton.onclick = () => castVote(url, 'danger');
-                } catch (error) {
-                    console.error('Scan failed:', error);
-                    document.getElementById('communityResults').innerHTML = '<p>Error scanning website. Please try again.</p>';
-                }
-            });
-            
-            // Allow pressing Enter in input field
-            urlInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') scanButton.click();
-            });
-        });
         
         // Handle voting
         function castVote(url, voteType) {
@@ -400,6 +396,93 @@
             const communityResultsEl = document.getElementById('communityResults');
             communityResultsEl.innerHTML += `<p style="color: var(--safe); font-weight: bold; margin-top: 10px;">Thank you for your vote!</p>`;
         }
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            initDB();
+            
+            const urlInput = document.getElementById('urlInput');
+            const scanButton = document.getElementById('scanButton');
+            const safeButton = document.getElementById('safeButton');
+            const dangerButton = document.getElementById('dangerButton');
+            const resultsEl = document.getElementById('results');
+            const errorMessageEl = document.getElementById('errorMessage');
+            const domainCheckEl = document.getElementById('domainCheck');
+            const domainCheckText = document.getElementById('domainCheckText');
+            const voteSection = document.getElementById('voteSection');
+            
+            // Check if we're on the results page
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlParam = urlParams.get('url');
+            
+            if (urlParam) {
+                // We're on the results page
+                document.querySelector('.scanner-container h1').textContent = 'Scan Results';
+                urlInput.value = urlParam;
+                
+                // Show results immediately
+                resultsEl.classList.remove('hidden');
+                voteSection.classList.remove('hidden');
+                
+                const data = getWebsiteData(urlParam);
+                updateResultsUI(urlParam, data);
+                
+                // Set up vote buttons
+                safeButton.onclick = () => castVote(urlParam, 'safe');
+                dangerButton.onclick = () => castVote(urlParam, 'danger');
+                
+                // Hide the scan button and input
+                document.querySelector('.url-input-container').style.display = 'none';
+            } else {
+                // We're on the home page
+                scanButton.addEventListener('click', async () => {
+                    const url = urlInput.value.trim();
+                    if (!url) return;
+                    
+                    // Hide previous results and errors
+                    resultsEl.classList.add('hidden');
+                    errorMessageEl.classList.remove('visible');
+                    
+                    // Validate domain format
+                    if (!isValidDomain(url)) {
+                        errorMessageEl.textContent = 'Invalid domain format. Please enter a valid website address.';
+                        errorMessageEl.classList.add('visible');
+                        return;
+                    }
+                    
+                    // Show domain checking
+                    domainCheckEl.classList.remove('hidden');
+                    domainCheckText.textContent = 'Verifying domain...';
+                    
+                    try {
+                        // Simulate DNS check
+                        const domainExists = await simulateDnsCheck(url);
+                        if (!domainExists) {
+                            errorMessageEl.textContent = 'This domain does not exist or is not reachable.';
+                            errorMessageEl.classList.add('visible');
+                            domainCheckEl.classList.add('hidden');
+                            return;
+                        }
+                        
+                        // Domain is valid and exists - redirect to results page
+                        domainCheckText.textContent = 'Domain verified! Redirecting...';
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        window.location.href = `/virusscan?url=${encodeURIComponent(normalizeUrl(url))}`;
+                    } catch (error) {
+                        console.error('Scan failed:', error);
+                        errorMessageEl.textContent = 'Error scanning website. Please try again.';
+                        errorMessageEl.classList.add('visible');
+                        domainCheckEl.classList.add('hidden');
+                    }
+                });
+                
+                // Allow pressing Enter in input field
+                urlInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') scanButton.click();
+                });
+            }
+        });
     </script>
 </body>
 </html>
