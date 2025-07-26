@@ -11,6 +11,7 @@
             --unknown: #f39c12;
             --dark: #2c3e50;
             --light: #ecf0f1;
+            --error: #e74c3c;
         }
         body {
             font-family: 'Segoe UI', system-ui, sans-serif;
@@ -72,6 +73,12 @@
             border-radius: 6px;
             font-size: 0.9rem;
         }
+        .error-message {
+            color: var(--error);
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            display: none;
+        }
         footer {
             margin-top: 3rem;
             text-align: center;
@@ -90,6 +97,7 @@
         <form id="scanner-form" onsubmit="scanURL(event)">
             <input type="text" id="urlInput" placeholder="Enter website URL (e.g., example.com)" required>
             <button type="submit" id="scanButton">Scan</button>
+            <div id="domainError" class="error-message">Please enter a valid domain (e.g., example.com)</div>
         </form>
         
         <div class="instructions">
@@ -104,6 +112,7 @@
 
     <footer>
         <p>This is a user-powered system. Results depend on community votes.</p>
+        <p>&copy; 2024-2025 Uxidone Corporation. All rights reserved.</p>
     </footer>
 
     <script>
@@ -111,32 +120,48 @@
             event.preventDefault();
             
             let url = document.getElementById('urlInput').value.trim();
+            const errorElement = document.getElementById('domainError');
             
-            // Basic validation
+            // Hide error initially
+            errorElement.style.display = 'none';
+            
+            // Basic empty validation
             if (!url) {
-                alert('Please enter a URL');
+                errorElement.textContent = 'Please enter a URL';
+                errorElement.style.display = 'block';
                 return;
             }
             
             // Clean the URL
             url = cleanURL(url);
             
-            // Redirect to scan page
+            // Validate domain format
+            if (!isValidDomain(url)) {
+                errorElement.textContent = 'Please enter a valid domain (e.g., example.com)';
+                errorElement.style.display = 'block';
+                return;
+            }
+            
+            // Redirect to scan page if valid
             window.location.href = `/virusscan/?url=${encodeURIComponent(url)}`;
         }
         
         function cleanURL(url) {
             // Remove protocol and www
             url = url.replace(/^(https?:\/\/)?(www\.)?/i, '');
-            // Remove path and query if not a domain
-            if (!url.includes('.') || url.split('.').length < 2) {
-                return url;
-            }
-            // Take only domain and TLD
-            const parts = url.split('/')[0].split('?')[0].split(':')[0];
-            return parts.toLowerCase();
+            // Remove path, query and fragments
+            url = url.split('/')[0].split('?')[0].split('#')[0];
+            return url.toLowerCase();
+        }
+        
+        function isValidDomain(url) {
+            // Basic domain validation regex
+            const domainRegex = /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i;
+            // Special case for localhost
+            if (url === 'localhost') return true;
+            // Test against regex
+            return domainRegex.test(url);
         }
     </script>
 </body>
 </html>
-2024 - 2025 Uxidone Corporation all right reserved.
