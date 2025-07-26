@@ -188,7 +188,7 @@
           .then(response => {
             if (!response.ok) {
               // Create the file if it doesn't exist
-              fetch('https://api.github.com/repos/[YOUR_USERNAME]/guessmyvirus.github.io/contents/votes.json', {
+              fetch('https://api.github.com/repos/GuessMyVirus/GuessMyVirus.github.io/contents/votes.json', {
                 method: 'PUT',
                 headers: {
                   'Authorization': 'token [YOUR_GITHUB_TOKEN]',
