@@ -205,6 +205,11 @@
             border-radius: 8px;
             border: 1px dashed var(--border);
         }
+        .copyright {
+            font-size: 0.7rem;
+            color: #95a5a6;
+            margin-top: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -247,6 +252,7 @@
         <div class="disclaimer">
             <p>This is a community-powered system. Results are shared across all users.</p>
             <p>Always use caution when visiting unknown websites.</p>
+            <div class="copyright">&copy; 2024-2025 Uxidone Corporation. All rights reserved.</div>
         </div>
     </div>
 
@@ -434,7 +440,9 @@
                 // Hide the scan button and input
                 document.querySelector('.url-input-container').style.display = 'none';
             } else {
-                // We're on the home page
+                // We're on the home page - hide voting section
+                voteSection.style.display = 'none';
+                
                 scanButton.addEventListener('click', async () => {
                     const url = urlInput.value.trim();
                     if (!url) return;
