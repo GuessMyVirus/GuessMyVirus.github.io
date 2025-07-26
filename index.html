@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuessMyVirus - Crowdsourced URL Scanner</title>
+    <style>
+        :root {
+            --danger: #e74c3c;
+            --safe: #2ecc71;
+            --unknown: #f39c12;
+            --dark: #2c3e50;
+            --light: #ecf0f1;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        h1 {
+            color: var(--danger);
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .scanner-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #scanner-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+        #urlInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        #urlInput:focus {
+            border-color: var(--danger);
+            outline: none;
+        }
+        #scanButton {
+            background: var(--danger);
+            color: white;
+            border: none;
+            padding: 0 2rem;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #scanButton:hover {
+            background: #c0392b;
+            transform: translateY(-1px);
+        }
+        .instructions {
+            background: var(--light);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        footer {
+            margin-top: 3rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GuessMyVirus</h1>
+        <p>A community-powered website safety checker</p>
+    </header>
+
+    <div class="scanner-box">
+        <form id="scanner-form" onsubmit="scanURL(event)">
+            <input type="text" id="urlInput" placeholder="Enter website URL (e.g., example.com)" required>
+            <button type="submit" id="scanButton">Scan</button>
+        </form>
+        
+        <div class="instructions">
+            <h3>How it works:</h3>
+            <ol>
+                <li>Enter any website URL above</li>
+                <li>View community safety reports</li>
+                <li>Contribute by voting if the site is safe or dangerous</li>
+            </ol>
+        </div>
+    </div>
+
+    <footer>
+        <p>This is a user-powered system. Results depend on community votes.</p>
+    </footer>
+
+    <script>
+        function scanURL(event) {
+            event.preventDefault();
+            
+            let url = document.getElementById('urlInput').value.trim();
+            
+            // Basic validation
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+            
+            // Clean the URL
+            url = cleanURL(url);
+            
+            // Redirect to scan page
+            window.location.href = `/virusscan/?url=${encodeURIComponent(url)}`;
+        }
+        
+        function cleanURL(url) {
+            // Remove protocol and www
+            url = url.replace(/^(https?:\/\/)?(www\.)?/i, '');
+            // Remove path and query if not a domain
+            if (!url.includes('.') || url.split('.').length < 2) {
+                return url;
+            }
+            // Take only domain and TLD
+            const parts = url.split('/')[0].split('?')[0].split(':')[0];
+            return parts.toLowerCase();
+        }
+    </script>
+</body>
+</html>
+2024 - 2025 Uxidone Corporation all right reserved.
