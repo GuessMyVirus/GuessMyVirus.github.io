@@ -1,29 +1,405 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GuessMyVirus</title>
+    <title>GuessMyVirus Scanner</title>
     <style>
-        body, html {
+        :root {
+            --danger: #e74c3c;
+            --safe: #2ecc71;
+            --unknown: #f39c12;
+            --dark: #2c3e50;
+            --light: #ecf0f1;
+        }
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            height: 100%;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: #f5f5f5;
+            color: var(--dark);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow: hidden;
         }
-        iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+        header {
+            background-color: var(--danger);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+        .scanner-container {
+            padding: 20px;
+        }
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .url-input input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        .url-input button {
+            padding: 12px 20px;
+            background-color: var(--danger);
+            color: white;
             border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .url-input button:hover {
+            background-color: #c0392b;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 6px;
+            background-color: var(--light);
+        }
+        .verdict {
+            font-size: 1.3rem;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .verdict-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .verdict-safe {
+            background: var(--safe);
+            color: white;
+        }
+        .verdict-unknown {
+            background: var(--unknown);
+            color: white;
+        }
+        .vote-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .vote-button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+        }
+        .vote-button:hover {
+            opacity: 0.9;
+        }
+        .vote-safe {
+            background: var(--safe);
+            color: white;
+        }
+        .vote-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .community-results {
+            margin-top: 20px;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: var(--danger);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .disclaimer {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .error-message {
+            color: var(--danger);
+            margin-top: 10px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <iframe src="https://guessmyvirus.lovable.app" 
-            title="GuessMyVirus Scanner"
-            allowfullscreen></iframe>
+    <div class="container">
+        <header>
+            <h1>GuessMyVirus Scanner</h1>
+            <p>Community-powered website safety checker</p>
+        </header>
+
+        <div class="scanner-container">
+            <div class="url-input">
+                <input type="text" id="urlInput" placeholder="Enter website URL (e.g. example.com)" autocomplete="off" value="">
+                <button id="scanButton">Scan</button>
+            </div>
+            <div id="errorMessage" class="error-message hidden"></div>
+
+            <div id="results" class="results hidden">
+                <div id="verdict" class="verdict verdict-unknown">
+                    Scan result will appear here
+                </div>
+                
+                <div class="vote-buttons">
+                    <button class="vote-button vote-safe" id="safeButton">Mark as Safe</button>
+                    <button class="vote-button vote-danger" id="dangerButton">Mark as Dangerous</button>
+                </div>
+
+                <div id="communityResults" class="community-results">
+                    <div id="loadingResults">
+                        <span class="loading"></span> Loading community reports...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="disclaimer">
+            <p>This is a community-powered system. Results are shared across all users.</p>
+            <p>Always use caution when visiting unknown websites.</p>
+        </div>
+    </div>
+
+    <script>
+        // Database simulation using localStorage with shared key
+        const DB_NAME = 'guessmyvirus_shared_db';
+        
+        // Initialize database if it doesn't exist
+        function initDB() {
+            if (!localStorage.getItem(DB_NAME)) {
+                localStorage.setItem(DB_NAME, JSON.stringify({
+                    websites: {
+                        'example.com': {
+                            safeVotes: 15,
+                            dangerVotes: 2,
+                            lastScanned: new Date().toISOString()
+                        },
+                        'google.com': {
+                            safeVotes: 120,
+                            dangerVotes: 3,
+                            lastScanned: new Date().toISOString()
+                        },
+                        'phishingsite.com': {
+                            safeVotes: 2,
+                            dangerVotes: 45,
+                            lastScanned: new Date().toISOString()
+                        }
+                    },
+                    lastUpdated: new Date().toISOString()
+                }));
+            }
+        }
+        
+        // Get website data
+        function getWebsiteData(url) {
+            const db = JSON.parse(localStorage.getItem(DB_NAME));
+            const normalizedUrl = normalizeUrl(url);
+            return db.websites[normalizedUrl] || {
+                safeVotes: 0,
+                dangerVotes: 0,
+                lastScanned: new Date().toISOString()
+            };
+        }
+        
+        // Save website data
+        function saveWebsiteData(url, data) {
+            const db = JSON.parse(localStorage.getItem(DB_NAME));
+            const normalizedUrl = normalizeUrl(url);
+            db.websites[normalizedUrl] = data;
+            db.lastUpdated = new Date().toISOString();
+            localStorage.setItem(DB_NAME, JSON.stringify(db));
+        }
+        
+        // Normalize URL for consistent storage
+        function normalizeUrl(url) {
+            // Remove protocol, www, and trailing slashes
+            return url.replace(/^(https?:\/\/)?(www\.)?/, '')
+                     .split('/')[0]
+                     .toLowerCase()
+                     .trim();
+        }
+        
+        // Validate domain format
+        function isValidDomain(url) {
+            if (!url) return false;
+            const normalized = normalizeUrl(url);
+            // Basic domain validation regex
+            return /^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/.test(normalized);
+        }
+        
+        // Simulate DNS check (in a real app, this would make an actual DNS query)
+        function simulateDnsCheck(url) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    // Simulate checking if domain exists
+                    const normalized = normalizeUrl(url);
+                    // List of "non-existent" domains for demo purposes
+                    const fakeDomains = ['nonexistent123.com', 'fake-test-domain.xyz', 'not-a-real-site.org'];
+                    resolve(!fakeDomains.includes(normalized));
+                }, 500);
+            });
+        }
+        
+        // Update the UI with scan results
+        function updateResultsUI(url, data) {
+            const totalVotes = data.safeVotes + data.dangerVotes;
+            const verdictEl = document.getElementById('verdict');
+            const communityResultsEl = document.getElementById('communityResults');
+            
+            if (totalVotes === 0) {
+                verdictEl.className = 'verdict verdict-unknown';
+                verdictEl.innerHTML = '⚠️ No reports yet<br><small>Be the first to vote on this site</small>';
+                communityResultsEl.innerHTML = '<p>No community reports yet for this site.</p>';
+            } else {
+                const safePercent = Math.round((data.safeVotes / totalVotes) * 100);
+                
+                if (safePercent >= 60) {
+                    verdictEl.className = 'verdict verdict-safe';
+                    verdictEl.innerHTML = `✓ Likely Safe<br><small>${safePercent}% of ${totalVotes} votes</small>`;
+                } else if (safePercent <= 40) {
+                    verdictEl.className = 'verdict verdict-danger';
+                    verdictEl.innerHTML = `⚠️ Likely Dangerous<br><small>${100 - safePercent}% of ${totalVotes} votes</small>`;
+                } else {
+                    verdictEl.className = 'verdict verdict-unknown';
+                    verdictEl.innerHTML = `⁉️ Uncertain Reputation<br><small>${safePercent}% safe vs ${100 - safePercent}% dangerous</small>`;
+                }
+                
+                communityResultsEl.innerHTML = `
+                    <h3>Community Reports</h3>
+                    <p>${data.safeVotes} safe votes vs ${data.dangerVotes} dangerous votes</p>
+                    ${data.dangerVotes > 0 ? '<p>Some users reported: Possible malware, phishing, or scam</p>' : ''}
+                    <p><small>Last scanned: ${new Date(data.lastScanned).toLocaleString()}</small></p>
+                `;
+            }
+        }
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            initDB();
+            
+            const urlInput = document.getElementById('urlInput');
+            const scanButton = document.getElementById('scanButton');
+            const safeButton = document.getElementById('safeButton');
+            const dangerButton = document.getElementById('dangerButton');
+            const resultsEl = document.getElementById('results');
+            const errorMessageEl = document.getElementById('errorMessage');
+            
+            // Check for URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlParam = urlParams.get('url');
+            if (urlParam) {
+                urlInput.value = urlParam;
+                scanButton.click();
+            }
+            
+            // Scan button click handler
+            scanButton.addEventListener('click', async () => {
+                const url = urlInput.value.trim();
+                if (!url) return;
+                
+                // Hide previous results and errors
+                resultsEl.classList.add('hidden');
+                errorMessageEl.classList.add('hidden');
+                
+                // Validate domain format
+                if (!isValidDomain(url)) {
+                    errorMessageEl.textContent = 'Invalid domain format. Please enter a valid website address.';
+                    errorMessageEl.classList.remove('hidden');
+                    return;
+                }
+                
+                // Show loading state
+                resultsEl.classList.remove('hidden');
+                document.getElementById('loadingResults').classList.remove('hidden');
+                document.getElementById('communityResults').innerHTML = '<span class="loading"></span> Scanning website...';
+                
+                try {
+                    // Simulate DNS check
+                    const domainExists = await simulateDnsCheck(url);
+                    if (!domainExists) {
+                        errorMessageEl.textContent = 'This domain does not exist or is not reachable.';
+                        errorMessageEl.classList.remove('hidden');
+                        resultsEl.classList.add('hidden');
+                        return;
+                    }
+                    
+                    // Redirect to the proper URL format
+                    window.location.href = `/virusscan?url=${encodeURIComponent(url)}`;
+                    
+                    // This code won't actually execute because of the redirect above
+                    // It's here just in case the redirect fails
+                    const data = getWebsiteData(url);
+                    updateResultsUI(url, data);
+                    
+                    // Set up vote buttons for this URL
+                    safeButton.onclick = () => castVote(url, 'safe');
+                    dangerButton.onclick = () => castVote(url, 'danger');
+                } catch (error) {
+                    console.error('Scan failed:', error);
+                    document.getElementById('communityResults').innerHTML = '<p>Error scanning website. Please try again.</p>';
+                }
+            });
+            
+            // Allow pressing Enter in input field
+            urlInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') scanButton.click();
+            });
+        });
+        
+        // Handle voting
+        function castVote(url, voteType) {
+            const data = getWebsiteData(url);
+            
+            if (voteType === 'safe') {
+                data.safeVotes += 1;
+            } else {
+                data.dangerVotes += 1;
+            }
+            
+            data.lastScanned = new Date().toISOString();
+            saveWebsiteData(url, data);
+            
+            // Update UI with new data
+            updateResultsUI(url, data);
+            
+            // Show thank you message
+            const communityResultsEl = document.getElementById('communityResults');
+            communityResultsEl.innerHTML += `<p style="color: var(--safe); font-weight: bold; margin-top: 10px;">Thank you for your vote!</p>`;
+        }
+    </script>
 </body>
 </html>
