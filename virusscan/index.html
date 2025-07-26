@@ -122,21 +122,48 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        .captcha-box {
+        .captcha-container {
             margin: 1rem 0;
             padding: 1rem;
             background: #f8f9fa;
             border-radius: 6px;
             display: none;
         }
+        .captcha-display {
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            letter-spacing: 3px;
+            margin: 10px 0;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #ddd;
+            display: inline-block;
+            user-select: none;
+        }
+        .captcha-display span {
+            display: inline-block;
+            transform: rotate(calc(-5deg + (10deg * var(--rot))));
+            color: rgb(
+                calc(50 + (var(--r) * 150)),
+                calc(50 + (var(--g) * 150)),
+                calc(50 + (var(--b) * 150))
+            );
+            filter: blur(calc(var(--blur) * 0.3px));
+        }
+        .captcha-input {
+            padding: 10px;
+            font-size: 16px;
+            width: 200px;
+            margin-right: 10px;
+        }
         .security-note {
             font-size: 0.7rem;
             color: #7f8c8d;
             margin-top: 1rem;
         }
-        #captcha span {
-            display: inline-block;
-            user-select: none;
+        .honeypot {
+            position: absolute;
+            left: -9999px;
         }
     </style>
 </head>
@@ -146,6 +173,9 @@
     </header>
 
     <div class="results-container">
+        <!-- Honeypot field for bots -->
+        <input type="text" class="honeypot" name="username" autocomplete="off">
+        
         <div class="url-display">
             Scanned URL: <strong id="scanned-url"></strong>
         </div>
@@ -155,15 +185,17 @@
         </div>
         
         <div class="vote-buttons" id="voteButtons">
-            <button class="vote-button vote-safe" onclick="showCaptcha('safe')">Mark as Safe</button>
-            <button class="vote-button vote-danger" onclick="showCaptcha('danger')">Mark as Dangerous</button>
+            <button class="vote-button vote-safe" onclick="initiateVote('safe')">Mark as Safe</button>
+            <button class="vote-button vote-danger" onclick="initiateVote('danger')">Mark as Dangerous</button>
         </div>
         
-        <div class="captcha-box" id="captchaBox">
-            <p>Please verify you're human:</p>
-            <div id="captcha" style="letter-spacing: 2px; font-weight: bold;"></div>
-            <input type="text" id="captchaInput" placeholder="Enter the code" autocomplete="off">
-            <button onclick="verifyCaptcha()">Submit Vote</button>
+        <div class="captcha-container" id="captchaContainer">
+            <p>Prove you're human (attempt <span id="attempt-count">1</span>/3):</p>
+            <div id="captcha" class="captcha-display"></div>
+            <div>
+                <input type="text" id="captchaInput" class="captcha-input" placeholder="Enter CAPTCHA" autocomplete="off">
+                <button onclick="verifyCaptcha()">Submit</button>
+            </div>
             <p class="security-note">CAPTCHA refreshes after failed attempts</p>
         </div>
         
@@ -183,58 +215,39 @@
     </div>
 
     <script>
-        // Initialize votes.json if it doesn't exist
-        fetch('votes.json')
-          .then(response => {
-            if (!response.ok) {
-              // Create the file if it doesn't exist
-              fetch('https://api.github.com/repos/GuessMyVirus/GuessMyVirus.github.io/contents/votes.json', {
-                method: 'PUT',
-                headers: {
-                  'Authorization': 'token [YOUR_GITHUB_TOKEN]',
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  message: 'Initialize votes database',
-                  content: btoa('{}')
-                })
-              });
-            }
-          })
-          .catch(error => {
-            console.error('Error initializing votes.json:', error);
-          });
-
-        // Enhanced CAPTCHA Configuration
-        const CAPTCHA_CONFIG = {
-            length: 6,
-            useNumbers: true,
-            useLowercase: false,
-            useUppercase: true,
-            useSymbols: true,
-            excludeSimilar: true,
-            expirationTime: 300000,
-            maxAttempts: 3
-        };
-
-        // Configuration
-        const CONFIG = {
+        // Security Configuration
+        const SECURITY = {
+            MAX_VOTES_PER_IP: 10,
             MAX_VOTES_PER_SESSION: 5,
-            VOTE_DB: 'votes.json',
-            USE_GITHUB_DB: true
+            CAPTCHA_LENGTH: 7,
+            CAPTCHA_MAX_ATTEMPTS: 3,
+            CAPTCHA_TIMEOUT: 300000, // 5 minutes
+            VOTE_COOLDOWN: 60000, // 1 minute
+            HONEYPOT_TIMEOUT: 2000 // 2 seconds
         };
 
         // State variables
         let currentVoteType = '';
         let currentCaptcha = '';
-        let captchaExpiry = 0;
         let captchaAttempts = 0;
         let voteCount = 0;
         let url = '';
-        let fallbackMode = false;
+        let lastVoteTime = 0;
+        let isBotDetected = false;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async function() {
+            // Check for bot-like behavior (fast form submission)
+            setTimeout(() => {
+                const honeypot = document.querySelector('.honeypot');
+                if (honeypot.value) {
+                    isBotDetected = true;
+                    alert('Security violation detected. Access denied.');
+                    document.body.innerHTML = '<h1>Access Denied</h1><p>Security violation detected.</p>';
+                    return;
+                }
+            }, SECURITY.HONEYPOT_TIMEOUT);
+
             // Get URL parameters
             const params = new URLSearchParams(window.location.search);
             url = params.get('url') || 'example.com';
@@ -244,16 +257,8 @@
             // Display the scanned URL
             document.getElementById('scanned-url').textContent = url;
             
-            // Check GitHub availability if enabled
-            if (CONFIG.USE_GITHUB_DB) {
-                await checkGitHubAvailability();
-            } else {
-                fallbackMode = true;
-                initializeLocalStorage();
-            }
-            
             // Process vote if one was submitted
-            if (vote && captcha) {
+            if (vote && captcha && !isBotDetected) {
                 await processVote(vote, captcha);
             }
             
@@ -261,171 +266,90 @@
             await loadCommunityResults();
         });
 
-        // Enhanced CAPTCHA Functions
-        function generateSecureCaptcha() {
-            let chars = '';
-            const similarChars = '0O1lIi';
-            
-            if (CAPTCHA_CONFIG.useNumbers) {
-                chars += '23456789';
-            }
-            if (CAPTCHA_CONFIG.useUppercase) {
-                chars += 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-            }
-            if (CAPTCHA_CONFIG.useSymbols) {
-                chars += '!@#$%^&*';
-            }
-
+        // Enhanced CAPTCHA generation with visual distortion
+        function generateHardCaptcha() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789@#$%&';
             let result = '';
-            const charsLength = chars.length;
-            
-            for (let i = 0; i < CAPTCHA_CONFIG.length; i++) {
-                result += chars.charAt(Math.floor(Math.random() * charsLength));
+            for (let i = 0; i < SECURITY.CAPTCHA_LENGTH; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-
-            if (CAPTCHA_CONFIG.excludeSimilar) {
-                const distortionFactor = 0.3;
-                result = result.split('').map(c => {
-                    if (Math.random() < distortionFactor && similarChars.includes(c)) {
-                        return similarChars.charAt(Math.floor(Math.random() * similarChars.length));
-                    }
-                    return c;
-                }).join('');
-            }
-
-            currentCaptcha = result;
-            captchaExpiry = Date.now() + CAPTCHA_CONFIG.expirationTime;
             return result;
         }
 
-        function displayCaptcha() {
+        function displayCaptcha(captchaText) {
             const captchaElement = document.getElementById('captcha');
-            const captchaText = generateSecureCaptcha();
-            
             captchaElement.innerHTML = '';
-            for (let i = 0; i < captchaText.length; i++) {
-                const charSpan = document.createElement('span');
-                charSpan.textContent = captchaText[i];
-                charSpan.style.display = 'inline-block';
-                charSpan.style.transform = `rotate(${Math.random() * 10 - 5}deg)`;
-                charSpan.style.fontSize = `${18 + Math.random() * 6}px`;
-                charSpan.style.margin = `0 ${Math.random() * 5}px`;
-                charSpan.style.color = `rgb(${Math.floor(Math.random() * 100)}, 
-                                        ${Math.floor(Math.random() * 100)}, 
-                                        ${Math.floor(Math.random() * 100)})`;
-                captchaElement.appendChild(charSpan);
-            }
+            
+            captchaText.split('').forEach((char, index) => {
+                const span = document.createElement('span');
+                span.textContent = char;
+                span.style.setProperty('--rot', Math.random());
+                span.style.setProperty('--r', Math.random());
+                span.style.setProperty('--g', Math.random());
+                span.style.setProperty('--b', Math.random());
+                span.style.setProperty('--blur', Math.random());
+                captchaElement.appendChild(span);
+            });
         }
 
-        function isCaptchaValid(input, captcha) {
-            if (input.toUpperCase() === captcha.toUpperCase()) return true;
-            
-            const similarChars = {
-                '0': 'O', 'O': '0',
-                '1': 'I', 'I': '1',
-                '5': 'S', 'S': '5',
-                '8': 'B', 'B': '8'
-            };
-            
-            if (input.length !== captcha.length) return false;
-            
-            for (let i = 0; i < input.length; i++) {
-                const inputChar = input[i].toUpperCase();
-                const captchaChar = captcha[i].toUpperCase();
-                
-                if (inputChar !== captchaChar && 
-                    (!similarChars[inputChar] || similarChars[inputChar] !== captchaChar)) {
-                    return false;
-                }
+        function initiateVote(type) {
+            // Check cooldown period
+            const now = Date.now();
+            if (now - lastVoteTime < SECURITY.VOTE_COOLDOWN) {
+                alert(`Please wait ${Math.ceil((SECURITY.VOTE_COOLDOWN - (now - lastVoteTime))/1000)} seconds before voting again.`);
+                return;
             }
-            
-            return true;
-        }
 
-        function showCaptcha(type) {
             currentVoteType = type;
-            document.getElementById('voteButtons').style.display = 'none';
-            const captchaBox = document.getElementById('captchaBox');
-            captchaBox.style.display = 'block';
             captchaAttempts = 0;
-            displayCaptcha();
+            document.getElementById('voteButtons').style.display = 'none';
+            document.getElementById('captchaContainer').style.display = 'block';
+            document.getElementById('attempt-count').textContent = '1';
+            
+            // Generate and display new CAPTCHA
+            currentCaptcha = generateHardCaptcha();
+            displayCaptcha(currentCaptcha);
         }
 
         function verifyCaptcha() {
+            if (isBotDetected) return;
+            
             const userInput = document.getElementById('captchaInput').value.trim();
             captchaAttempts++;
+            document.getElementById('attempt-count').textContent = captchaAttempts + 1;
             
-            if (Date.now() > captchaExpiry) {
-                alert('CAPTCHA has expired. Please try again.');
-                displayCaptcha();
-                document.getElementById('captchaInput').value = '';
-                return;
-            }
-            
-            if (captchaAttempts >= CAPTCHA_CONFIG.maxAttempts) {
-                alert('Too many failed attempts. Please refresh the page and try again.');
-                document.getElementById('captchaBox').style.display = 'none';
-                document.getElementById('voteButtons').style.display = 'flex';
-                return;
-            }
-            
-            if (isCaptchaValid(userInput, currentCaptcha)) {
+            // Check if CAPTCHA matches (case insensitive)
+            if (userInput.toUpperCase() === currentCaptcha.toUpperCase()) {
                 submitVote(currentVoteType);
             } else {
-                alert(`CAPTCHA verification failed (attempt ${captchaAttempts}/${CAPTCHA_CONFIG.maxAttempts}). Please try again.`);
-                document.getElementById('captchaInput').value = '';
-                displayCaptcha();
-            }
-        }
-
-        // Rest of your existing functions (checkGitHubAvailability, initializeVoteDatabase, etc.)
-        // ... [Keep all other existing functions unchanged]
-
-        async function checkGitHubAvailability() {
-            try {
-                const response = await fetch(CONFIG.VOTE_DB);
-                if (!response.ok) {
-                    await initializeVoteDatabase();
+                if (captchaAttempts >= SECURITY.CAPTCHA_MAX_ATTEMPTS) {
+                    alert('Too many failed attempts. Please try again later.');
+                    document.getElementById('captchaContainer').style.display = 'none';
+                    document.getElementById('voteButtons').style.display = 'flex';
+                    return;
                 }
-            } catch (error) {
-                console.warn('GitHub unavailable, using localStorage fallback:', error);
-                fallbackMode = true;
-                initializeLocalStorage();
-            }
-        }
-
-        async function initializeVoteDatabase() {
-            try {
-                const response = await fetch('/init-votes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ action: 'initialize' })
-                });
                 
-                if (!response.ok) {
-                    throw new Error('Failed to initialize database');
-                }
-            } catch (error) {
-                console.error('Database initialization failed:', error);
-                fallbackMode = true;
-                initializeLocalStorage();
-            }
-        }
-
-        function initializeLocalStorage() {
-            if (!localStorage.getItem('guessmyvirus_votes')) {
-                localStorage.setItem('guessmyvirus_votes', JSON.stringify({}));
+                alert(`CAPTCHA verification failed (attempt ${captchaAttempts}/${SECURITY.CAPTCHA_MAX_ATTEMPTS}).`);
+                document.getElementById('captchaInput').value = '';
+                
+                // Generate new CAPTCHA after failed attempt
+                currentCaptcha = generateHardCaptcha();
+                displayCaptcha(currentCaptcha);
             }
         }
 
         async function submitVote(type) {
-            if (voteCount >= CONFIG.MAX_VOTES_PER_SESSION) {
+            if (isBotDetected) return;
+            
+            const now = Date.now();
+            lastVoteTime = now;
+            
+            if (voteCount >= SECURITY.MAX_VOTES_PER_SESSION) {
                 alert('You have reached the maximum number of votes per session.');
                 return;
             }
 
+            // Show loading state
             const communityResults = document.getElementById('community-results');
             communityResults.innerHTML = `
                 <div id="loading-results">
@@ -433,37 +357,44 @@
                 </div>
             `;
 
-            const captcha = generateSecureCaptcha().substring(0, 8);
-            window.location.href = `/virusscan/?url=${encodeURIComponent(url)}&vote=${type}&captcha=${captcha}`;
+            // Generate security token
+            const token = generateSecurityToken();
+            
+            // Reset CAPTCHA UI
+            document.getElementById('captchaContainer').style.display = 'none';
+            document.getElementById('voteButtons').style.display = 'flex';
+            document.getElementById('captchaInput').value = '';
+            
+            // Redirect to process the vote
+            window.location.href = `/virusscan/?url=${encodeURIComponent(url)}&vote=${type}&token=${token}&t=${now}`;
+        }
+
+        function generateSecurityToken() {
+            return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                .map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
         async function processVote(voteType, captcha) {
             try {
+                if (isBotDetected) return;
+                
                 voteCount++;
                 
-                if (captcha.length < 3) {
-                    throw new Error('Invalid verification');
+                // Get existing votes
+                let votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || '{}');
+                if (!votes[url]) {
+                    votes[url] = { safe: 0, danger: 0 };
                 }
-
-                if (fallbackMode) {
-                    const votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || '{}');
-                    if (!votes[url]) votes[url] = { safe: 0, danger: 0 };
-                    votes[url][voteType === 'safe' ? 'safe' : 'danger']++;
-                    localStorage.setItem('guessmyvirus_votes', JSON.stringify(votes));
-                } else {
-                    const response = await fetch(CONFIG.VOTE_DB);
-                    let votes = await response.json();
-                    if (!votes[url]) votes[url] = { safe: 0, danger: 0 };
-                    votes[url][voteType === 'safe' ? 'safe' : 'danger']++;
-                    
-                    await fetch('/update-votes', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ votes })
-                    });
-                }
+                
+                // Update vote count
+                votes[url][voteType === 'safe' ? 'safe' : 'danger']++;
+                
+                // Save back to localStorage
+                localStorage.setItem('guessmyvirus_votes', JSON.stringify(votes));
+                
+                // Reload to show updated results
+                window.location.href = `/virusscan/?url=${encodeURIComponent(url)}`;
+                
             } catch (error) {
                 console.error('Error processing vote:', error);
                 alert('Failed to submit vote. Please try again.');
@@ -472,18 +403,12 @@
 
         async function loadCommunityResults() {
             try {
-                let votes;
-                
-                if (fallbackMode) {
-                    votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || {});
-                } else {
-                    const response = await fetch(CONFIG.VOTE_DB);
-                    votes = await response.json();
-                }
-                
+                // Get votes from localStorage
+                const votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || '{}');
                 const urlData = votes[url] || { safe: 0, danger: 0 };
                 const totalVotes = urlData.safe + urlData.danger;
                 
+                // Calculate verdict
                 let verdict = 'unknown';
                 let verdictText = 'Not enough votes yet';
                 
@@ -502,6 +427,7 @@
                     }
                 }
                 
+                // Display verdict
                 const verdictDisplay = document.getElementById('verdict-display');
                 verdictDisplay.innerHTML = `
                     <div class="verdict verdict-${verdict}">
@@ -509,6 +435,7 @@
                     </div>
                 `;
                 
+                // Display community results
                 const communityResults = document.getElementById('community-results');
                 if (totalVotes > 0) {
                     communityResults.innerHTML = `
