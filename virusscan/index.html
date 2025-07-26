@@ -108,6 +108,32 @@
             text-decoration: none;
             font-weight: bold;
         }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.1);
+            border-radius: 50%;
+            border-top-color: var(--danger);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .captcha-box {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: none;
+        }
+        .security-note {
+            font-size: 0.7rem;
+            color: #7f8c8d;
+            margin-top: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -124,98 +150,271 @@
             <!-- Filled by JavaScript -->
         </div>
         
-        <div class="vote-buttons">
-            <button class="vote-button vote-safe" onclick="submitVote('safe')">Mark as Safe</button>
-            <button class="vote-button vote-danger" onclick="submitVote('danger')">Mark as Dangerous</button>
+        <div class="vote-buttons" id="voteButtons">
+            <button class="vote-button vote-safe" onclick="showCaptcha('safe')">Mark as Safe</button>
+            <button class="vote-button vote-danger" onclick="showCaptcha('danger')">Mark as Dangerous</button>
+        </div>
+        
+        <div class="captcha-box" id="captchaBox">
+            <p>Please verify you're human:</p>
+            <div id="captcha"></div>
+            <input type="text" id="captchaInput" placeholder="Enter the code">
+            <button onclick="verifyCaptcha()">Submit Vote</button>
         </div>
         
         <div class="community-results" id="community-results">
-            <!-- Filled by JavaScript -->
+            <div id="loading-results">
+                <span class="loading"></span> Loading community reports...
+            </div>
         </div>
         
         <a href="/" class="back-link">← Back to Scanner</a>
         
         <div class="disclaimer">
             <p>This is a community-powered system. Always use caution when visiting unknown websites.</p>
+            <p>&copy; 2024-2025 Uxidone Corporation. All rights reserved.</p>
+            <p class="security-note">Votes are limited to 5 per session with CAPTCHA verification.</p>
         </div>
     </div>
 
     <script>
-        // Get URL parameters
-        const params = new URLSearchParams(window.location.search);
-        const url = params.get('url') || 'example.com';
-        const vote = params.get('vote');
-        
-        // Display the scanned URL
-        document.getElementById('scanned-url').textContent = url;
-        
-        // Check if we have localStorage support
-        const hasStorage = typeof(Storage) !== 'undefined';
-        
-        // Get or create vote tracking for this URL
-        let urlVotes = hasStorage ? JSON.parse(localStorage.getItem('guessmyvirus_votes') || '{}') : {};
-        if (!urlVotes[url]) {
-            urlVotes[url] = { safe: 0, danger: 0 };
-        }
-        
-        // Process new vote
-        if (vote === 'safe') {
-            urlVotes[url].safe++;
-            if (hasStorage) {
-                localStorage.setItem('guessmyvirus_votes', JSON.stringify(urlVotes));
-            }
-        } else if (vote === 'danger') {
-            urlVotes[url].danger++;
-            if (hasStorage) {
-                localStorage.setItem('guessmyvirus_votes', JSON.stringify(urlVotes));
-            }
-        }
-        
-        // Calculate verdict
-        const totalVotes = urlVotes[url].safe + urlVotes[url].danger;
-        let verdict = 'unknown';
-        let verdictText = 'Not enough votes yet';
-        
-        if (totalVotes > 0) {
-            const safePercent = Math.round((urlVotes[url].safe / totalVotes) * 100);
-            const dangerPercent = 100 - safePercent;
+        // Configuration
+        const CONFIG = {
+            MAX_VOTES_PER_SESSION: 5,
+            CAPTCHA_LENGTH: 5,
+            VOTE_DB: 'votes.json',
+            USE_GITHUB_DB: true // Set to false for localStorage-only mode
+        };
+
+        // State variables
+        let currentVoteType = '';
+        let generatedCaptcha = '';
+        let voteCount = 0;
+        let url = '';
+        let fallbackMode = false;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Get URL parameters
+            const params = new URLSearchParams(window.location.search);
+            url = params.get('url') || 'example.com';
+            const vote = params.get('vote');
+            const captcha = params.get('captcha');
             
-            if (safePercent >= 60) {
-                verdict = 'safe';
-                verdictText = `Community Verdict: SAFE (${safePercent}% of ${totalVotes} votes)`;
-            } else if (dangerPercent >= 60) {
-                verdict = 'danger';
-                verdictText = `Community Verdict: DANGEROUS (${dangerPercent}% of ${totalVotes} votes)`;
+            // Display the scanned URL
+            document.getElementById('scanned-url').textContent = url;
+            
+            // Check GitHub availability if enabled
+            if (CONFIG.USE_GITHUB_DB) {
+                await checkGitHubAvailability();
             } else {
-                verdictText = `Community Split: ${safePercent}% safe vs ${dangerPercent}% dangerous`;
+                fallbackMode = true;
+                initializeLocalStorage();
+            }
+            
+            // Process vote if one was submitted
+            if (vote && captcha) {
+                await processVote(vote, captcha);
+            }
+            
+            // Load and display community results
+            await loadCommunityResults();
+        });
+
+        async function checkGitHubAvailability() {
+            try {
+                const response = await fetch(CONFIG.VOTE_DB);
+                if (!response.ok) {
+                    // If votes.json doesn't exist, create it
+                    await initializeVoteDatabase();
+                }
+            } catch (error) {
+                console.warn('GitHub unavailable, using localStorage fallback:', error);
+                fallbackMode = true;
+                initializeLocalStorage();
             }
         }
-        
-        // Display verdict
-        const verdictDisplay = document.getElementById('verdict-display');
-        verdictDisplay.innerHTML = `
-            <div class="verdict verdict-${verdict}">
-                ${verdict === 'safe' ? '✓' : verdict === 'danger' ? '⚠️' : '?'} ${verdictText}
-            </div>
-        `;
-        
-        // Display community results
-        const communityResults = document.getElementById('community-results');
-        if (totalVotes > 0) {
-            communityResults.innerHTML = `
-                <h3>Community Reports</h3>
-                <p>${urlVotes[url].safe} safe votes vs ${urlVotes[url].danger} dangerous votes</p>
-                ${verdict === 'danger' ? '<p>Common reports: May contain malware, phishing, or scams</p>' : ''}
-            `;
-        } else {
-            communityResults.innerHTML = `
-                <h3>Community Reports</h3>
-                <p>No votes yet - be the first to vote on this site!</p>
-            `;
+
+        async function initializeVoteDatabase() {
+            try {
+                const response = await fetch('/init-votes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action: 'initialize' })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to initialize database');
+                }
+            } catch (error) {
+                console.error('Database initialization failed:', error);
+                fallbackMode = true;
+                initializeLocalStorage();
+            }
         }
-        
-        function submitVote(type) {
-            window.location.href = `/virusscan/?url=${encodeURIComponent(url)}&vote=${type}`;
+
+        function initializeLocalStorage() {
+            if (!localStorage.getItem('guessmyvirus_votes')) {
+                localStorage.setItem('guessmyvirus_votes', JSON.stringify({}));
+            }
+        }
+
+        function showCaptcha(type) {
+            currentVoteType = type;
+            document.getElementById('voteButtons').style.display = 'none';
+            const captchaBox = document.getElementById('captchaBox');
+            captchaBox.style.display = 'block';
+            
+            // Generate simple CAPTCHA
+            generatedCaptcha = generateCaptcha(CONFIG.CAPTCHA_LENGTH);
+            document.getElementById('captcha').textContent = generatedCaptcha;
+        }
+
+        function generateCaptcha(length) {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function verifyCaptcha() {
+            const userInput = document.getElementById('captchaInput').value.trim();
+            if (userInput.toUpperCase() === generatedCaptcha) {
+                submitVote(currentVoteType);
+            } else {
+                alert('CAPTCHA verification failed. Please try again.');
+                document.getElementById('captchaInput').value = '';
+                generatedCaptcha = generateCaptcha(CONFIG.CAPTCHA_LENGTH);
+                document.getElementById('captcha').textContent = generatedCaptcha;
+            }
+        }
+
+        async function submitVote(type) {
+            if (voteCount >= CONFIG.MAX_VOTES_PER_SESSION) {
+                alert('You have reached the maximum number of votes per session.');
+                return;
+            }
+
+            // Show loading state
+            const communityResults = document.getElementById('community-results');
+            communityResults.innerHTML = `
+                <div id="loading-results">
+                    <span class="loading"></span> Submitting your vote...
+                </div>
+            `;
+
+            // Generate security token
+            const captcha = generateCaptcha(8);
+            
+            // Redirect to process the vote
+            window.location.href = `/virusscan/?url=${encodeURIComponent(url)}&vote=${type}&captcha=${captcha}`;
+        }
+
+        async function processVote(voteType, captcha) {
+            try {
+                voteCount++;
+                
+                // Simple CAPTCHA verification
+                if (captcha.length < 3) {
+                    throw new Error('Invalid verification');
+                }
+
+                if (fallbackMode) {
+                    // LocalStorage fallback
+                    const votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || '{}');
+                    if (!votes[url]) votes[url] = { safe: 0, danger: 0 };
+                    votes[url][voteType === 'safe' ? 'safe' : 'danger']++;
+                    localStorage.setItem('guessmyvirus_votes', JSON.stringify(votes));
+                } else {
+                    // GitHub database
+                    const response = await fetch(CONFIG.VOTE_DB);
+                    let votes = await response.json();
+                    if (!votes[url]) votes[url] = { safe: 0, danger: 0 };
+                    votes[url][voteType === 'safe' ? 'safe' : 'danger']++;
+                    
+                    // Save updated votes
+                    await fetch('/update-votes', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ votes })
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error processing vote:', error);
+                alert('Failed to submit vote. Please try again.');
+            }
+        }
+
+        async function loadCommunityResults() {
+            try {
+                let votes;
+                
+                if (fallbackMode) {
+                    votes = JSON.parse(localStorage.getItem('guessmyvirus_votes') || {});
+                } else {
+                    const response = await fetch(CONFIG.VOTE_DB);
+                    votes = await response.json();
+                }
+                
+                const urlData = votes[url] || { safe: 0, danger: 0 };
+                const totalVotes = urlData.safe + urlData.danger;
+                
+                // Calculate verdict
+                let verdict = 'unknown';
+                let verdictText = 'Not enough votes yet';
+                
+                if (totalVotes > 0) {
+                    const safePercent = Math.round((urlData.safe / totalVotes) * 100);
+                    const dangerPercent = 100 - safePercent;
+                    
+                    if (safePercent >= 60) {
+                        verdict = 'safe';
+                        verdictText = `Community Verdict: SAFE (${safePercent}% of ${totalVotes} votes)`;
+                    } else if (dangerPercent >= 60) {
+                        verdict = 'danger';
+                        verdictText = `Community Verdict: DANGEROUS (${dangerPercent}% of ${totalVotes} votes)`;
+                    } else {
+                        verdictText = `Community Split: ${safePercent}% safe vs ${dangerPercent}% dangerous`;
+                    }
+                }
+                
+                // Display verdict
+                const verdictDisplay = document.getElementById('verdict-display');
+                verdictDisplay.innerHTML = `
+                    <div class="verdict verdict-${verdict}">
+                        ${verdict === 'safe' ? '✓' : verdict === 'danger' ? '⚠️' : '?'} ${verdictText}
+                    </div>
+                `;
+                
+                // Display community results
+                const communityResults = document.getElementById('community-results');
+                if (totalVotes > 0) {
+                    communityResults.innerHTML = `
+                        <h3>Community Reports</h3>
+                        <p>${urlData.safe} safe votes vs ${urlData.danger} dangerous votes</p>
+                        ${verdict === 'danger' ? '<p>Common reports: May contain malware, phishing, or scams</p>' : ''}
+                        <p><small>Last updated: ${new Date().toLocaleString()}</small></p>
+                    `;
+                } else {
+                    communityResults.innerHTML = `
+                        <h3>Community Reports</h3>
+                        <p>No votes yet - be the first to vote on this site!</p>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading results:', error);
+                document.getElementById('community-results').innerHTML = `
+                    <p>Error loading community reports. Please try again later.</p>
+                `;
+            }
         }
     </script>
 </body>
